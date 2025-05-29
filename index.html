@@ -1,115 +1,179 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Vote Hayes Harder!</title>
   <style>
-    body {
-      background: #fef7e0;
-      font-family: 'Segoe UI', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
+    * {
+      box-sizing: border-box;
       margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #fff9e6;
+      font-family: 'Segoe UI', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .envelope-container {
+      position: relative;
+      width: 320px;
+      height: 220px;
+      perspective: 1000px;
+      cursor: pointer;
+      z-index: 10;
     }
 
     .envelope {
-      width: 300px;
-      height: 200px;
+      width: 100%;
+      height: 100%;
       background: #d93a3a;
       position: relative;
-      cursor: pointer;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
       border-radius: 5px;
       overflow: hidden;
-      transition: box-shadow 0.3s ease;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
     }
 
-    .envelope:hover {
-      box-shadow: 0 15px 30px rgba(0,0,0,0.3);
-    }
-
-    .envelope::before {
-      content: '';
+    .flap {
       position: absolute;
       width: 100%;
       height: 100%;
       background: #b32f2f;
       clip-path: polygon(0 0, 50% 50%, 100% 0);
-      transition: transform 1s;
       transform-origin: top;
-      z-index: 2;
+      transition: transform 1s ease;
+      z-index: 3;
     }
 
     .letter {
       position: absolute;
-      top: 100%;
-      left: 0;
       width: 100%;
-      padding: 20px;
+      height: 100%;
+      top: 0;
+      left: 0;
+      background: white;
+      transform: translateY(100%);
+      transition: transform 1s ease 0.5s;
+      z-index: 2;
+    }
+
+    .letter-content {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
       background: white;
       color: #333;
-      box-sizing: border-box;
-      border-top: 3px solid #d93a3a;
-      transition: top 1s;
-      z-index: 1;
-      font-size: 14px;
+      padding: 40px;
+      overflow-y: auto;
+      z-index: 999;
+      animation: fadeIn 1s forwards;
     }
 
-    .open .letter {
-      top: 0;
+    .letter-content h2 {
+      color: #b32f2f;
+      margin-bottom: 10px;
     }
 
-    .open::before {
-      transform: rotateX(180deg);
+    .letter-content ul {
+      padding-left: 20px;
+      margin: 10px 0;
     }
 
-    h1 {
-      margin-top: 30px;
-      color: #d93a3a;
-      text-align: center;
-      font-size: 22px;
-    }
-
-    .letter ul {
-      padding-left: 18px;
-    }
-
-    .letter li {
+    .letter-content li {
       margin-bottom: 8px;
     }
 
-    .letter h2 {
-      margin-top: 0;
-      color: #b32f2f;
+    .letter-content p {
+      margin: 10px 0;
+      line-height: 1.5;
+    }
+
+    .open .flap {
+      transform: rotateX(180deg);
+    }
+
+    .open .letter {
+      transform: translateY(-100%);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    h1 {
+      position: absolute;
+      bottom: 30px;
+      color: #d93a3a;
+      font-size: 24px;
+      z-index: 0;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      font-size: 20px;
+      background: #d93a3a;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    .close-btn:hover {
+      background: #a62a2a;
     }
   </style>
 </head>
 <body>
 
-  <div class="envelope" onclick="openEnvelope()">
-    <div class="letter">
-      <h2>Hi there!</h2>
-      <p>I'm <strong>Hayes Harder</strong>, and I'm running to be your next <strong>8th Grade Student Council President</strong>!</p>
-      <p>Why vote for me? Because I truly care about our school, our ideas, and our voice as students. I bring energy, creativity, and leadership — and I'm ready to make a difference.</p>
-      <p>Here’s what I’ll focus on:</p>
-      <ul>
-        <li>🎉 More fun events and spirit days</li>
-        <li>📣 Listening to what YOU want and making your ideas happen</li>
-        <li>🛠️ Improving things around school that matter to us</li>
-      </ul>
-      <p>Together, we can make 8th grade our best year yet!</p>
-      <p style="text-align: center; font-weight: bold;">Vote Hayes Harder 💪</p>
+  <div class="envelope-container" onclick="openEnvelope()">
+    <div class="envelope">
+      <div class="flap"></div>
+      <div class="letter"></div>
     </div>
   </div>
 
   <h1>Click the Envelope to Open!</h1>
 
+  <div class="letter-content" id="letterContent">
+    <button class="close-btn" onclick="closeLetter()">✖ Close</button>
+    <h2>Hi there!</h2>
+    <p>I'm <strong>Hayes Harder</strong>, and I'm running to be your next <strong>8th Grade Student Council President</strong>!</p>
+    <p>Why vote for me? Because I truly care about our school, our ideas, and our voice as students. I bring energy, creativity, and leadership — and I'm ready to make a difference.</p>
+    <p>Here’s what I’ll focus on:</p>
+    <ul>
+      <li>🎉 More fun events and spirit days</li>
+      <li>📣 Listening to what YOU want and making your ideas happen</li>
+      <li>🛠️ Improving things around school that matter to us</li>
+    </ul>
+    <p>Together, we can make 8th grade our best year yet!</p>
+    <p style="text-align: center; font-weight: bold;">Vote Hayes Harder 💪</p>
+  </div>
+
   <script>
     function openEnvelope() {
-      document.querySelector('.envelope').classList.toggle('open');
+      const envelope = document.querySelector('.envelope');
+      envelope.classList.add('open');
+
+      setTimeout(() => {
+        document.getElementById('letterContent').style.display = 'block';
+      }, 1500);
+    }
+
+    function closeLetter() {
+      document.getElementById('letterContent').style.display = 'none';
+      document.querySelector('.envelope').classList.remove('open');
     }
   </script>
 
