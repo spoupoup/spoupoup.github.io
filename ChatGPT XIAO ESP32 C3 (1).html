@@ -1,0 +1,116 @@
+\
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>chick-fil-a Router Admin</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;background:#0d1117;color:#eaf1ff;padding:18px}
+h1{margin:0 0 8px}button{background:#0b5cab;color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer;margin:4px}
+.btnDanger{background:#ef4444}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{padding:8px;border-bottom:1px solid #202733;text-align:left}
+.pill{display:inline-block;padding:6px 10px;background:#0f1620;border-radius:999px;border:1px solid #1f2a3a;color:#cfe0ff;margin-right:6px}
+</style>
+</head>
+<body>
+<h1>chick-fil-a Router Admin</h1>
+<p class="pill" id="statusPill">Not connected</p>
+<button id="btnConnect">Connect BLE</button>
+<button id="btnRefresh" disabled>Refresh Stations</button>
+
+<h3>Connected Stations</h3>
+<table>
+<thead><tr><th>MAC</th><th>IP</th><th>Action</th></tr></thead>
+<tbody id="stations"></tbody>
+</table>
+
+<script>
+const SERVICE = '12345678-1234-5678-1234-56789abcdef0';
+const CMD = '12345678-1234-5678-1234-56789abcdef1';
+const STAT = '12345678-1234-5678-1234-56789abcdef2';
+let device, server, svc, chrCmd, chrStat;
+
+function setStatus(s){ document.getElementById('statusPill').textContent = s; }
+function clearStations(){ document.getElementById('stations').innerHTML = ''; }
+
+async function connectBLE(){
+  if(!('bluetooth' in navigator)){ alert('Web Bluetooth not supported'); return; }
+  try {
+    device = await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE]}]});
+    setStatus('Connecting to ' + device.name);
+    server = await device.gatt.connect();
+    svc = await server.getPrimaryService(SERVICE);
+    chrCmd = await svc.getCharacteristic(CMD);
+    chrStat = await svc.getCharacteristic(STAT);
+    await chrStat.startNotifications();
+    chrStat.addEventListener('characteristicvaluechanged', handleNotify);
+    setStatus('Connected to ' + device.name);
+    document.getElementById('btnRefresh').disabled = false;
+    refreshStations();
+  } catch(e){
+    console.error(e); alert('Connection failed: ' + e);
+    setStatus('Not connected');
+  }
+}
+
+function handleNotify(e){
+  const decoder = new TextDecoder();
+  const val = decoder.decode(e.target.value);
+  try {
+    const obj = JSON.parse(val);
+    if(obj.type === 'stations') {
+      renderStations(obj.list);
+    } else if(obj.type === 'kick_result') {
+      alert('Kick result for ' + obj.mac + ': ' + obj.ok);
+      // refresh after kick
+      sendCmd('GET_STATIONS');
+    }
+  } catch(err){
+    console.log('Notify:', val);
+  }
+}
+
+function renderStations(list){
+  clearStations();
+  const tbody = document.getElementById('stations');
+  if(!list || list.length===0){
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="3">No stations connected</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  list.forEach(s=>{
+    const tr = document.createElement('tr');
+    const mac = s.mac || '';
+    const ip = s.ip || '';
+    tr.innerHTML = `<td>${mac}</td><td>${ip}</td><td><button data-mac="${mac}" class="kickBtn btnDanger">Kick</button></td>`;
+    tbody.appendChild(tr);
+  });
+  // attach handlers
+  document.querySelectorAll('.kickBtn').forEach(b=> b.onclick = (ev)=>{
+    const mac = ev.currentTarget.getAttribute('data-mac');
+    if(confirm('Kick ' + mac + ' from Wi-Fi?')) {
+      sendCmd('KICK:' + mac.replace(/:/g,''));
+    }
+  });
+}
+
+async function sendCmd(cmdStr){
+  if(!chrCmd) { alert('Not connected'); return; }
+  const enc = new TextEncoder();
+  const payload = enc.encode(cmdStr);
+  try { await chrCmd.writeValue(payload); }
+  catch(e){ console.error('Write failed', e); alert('Write failed: ' + e); }
+}
+
+async function refreshStations(){
+  sendCmd('GET_STATIONS');
+}
+
+document.getElementById('btnConnect').onclick = connectBLE;
+document.getElementById('btnRefresh').onclick = refreshStations;
+</script>
+</body>
+</html>
