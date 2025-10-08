@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ESP32 Button Logger</title>
+  <meta name="theme-color" content="#0b5cab" />
+  <style>
+    :root{
+      --bg:#0c0f14; --card:#121722; --muted:#93a4bf; --ink:#eaf1ff; --accent:#0b5cab; --accent-2:#38bdf8; --danger:#ef4444; --ok:#22c55e;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0c0f14,#0a0d12);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;}
+    header{position:sticky;top:0;background:rgba(12,15,20,.8);backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid #1e2633;}
+    .wrap{max-width:960px;margin:0 auto;padding:16px}
+    h1{font-weight:800;letter-spacing:.2px;margin:0 0 8px;font-size:clamp(20px,3.8vw,28px)}
+    p.lead{margin:0;color:var(--muted)}
+    .grid{display:grid;gap:14px;grid-template-columns:1fr}
+    @media(min-width:760px){.grid{grid-template-columns:1.1fr .9fr}}
+
+    .card{background:var(--card);border:1px solid #1e2633;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+    .card .hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #1e2633}
+    .card .body{padding:16px}
+
+    .btn{appearance:none;border:0;border-radius:10px;padding:10px 14px;font-weight:700;color:white;background:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:.15s transform ease,.2s background ease}
+    .btn:hover{transform:translateY(-1px)}
+    .btn.secondary{background:#243244;color:#e5f1ff}
+    .btn.ghost{background:transparent;border:1px solid #2a3650;color:#cfe3ff}
+    .btn.danger{background:var(--danger)}
+    .btn.small{padding:6px 10px;border-radius:8px;font-weight:600}
+
+    .status{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:#cfe3ff}
+    .dot{width:9px;height:9px;border-radius:999px;background:#5b6b86;box-shadow:0 0 0 2px #1b2433 inset}
+    .dot.ok{background:var(--ok)}
+    .dot.bad{background:var(--danger)}
+
+    table{width:100%;border-collapse:collapse;border-spacing:0}
+    th,td{border-bottom:1px solid #1e2633;padding:10px 8px;text-align:left}
+    th{color:#a9bbd6;font-size:12px;letter-spacing:.4px;text-transform:uppercase}
+    tbody tr:hover{background:#0f1520}
+    code{background:#0f1520;border:1px solid #233046;color:#cfe3ff;padding:2px 6px;border-radius:6px}
+    .muted{color:var(--muted)}
+    .pill{border:1px solid #2a3650;background:#132033;color:#e5f1ff;padding:6px 9px;border-radius:999px;font-size:12px}
+    footer{padding:20px 16px;color:#8395b3;text-align:center}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>ESP32 Button Logger</h1>
+      <p class="lead">Connect your phone/tablet/laptop to your ESP32-C3 over Bluetooth and log on-board button presses in real time.</p>
+    </div>
+  </header>
+
+  <main class="wrap" style="padding-top:16px;padding-bottom:28px">
+    <div class="grid">
+      <!-- Left: Connection + Live Log -->
+      <section class="card" id="connCard">
+        <div class="hdr">
+          <div class="status"><span class="dot" id="connDot"></span><span id="connText">Not connected</span></div>
+          <div class="actions">
+            <button class="btn" id="btnConnect" title="Connect via Web Bluetooth">🔗 Connect</button>
+            <button class="btn secondary" id="btnDisconnect" disabled>⏏ Disconnect</button>
+          </div>
+        </div>
+        <div class="body">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+            <span class="pill" id="devicePill">Device: —</span>
+            <span class="pill" id="servicePill">Service: custom</span>
+            <span class="pill" id="charPill">Characteristic: notify</span>
+          </div>
+          <p class="muted" style="margin-top:0">Tip: On iOS/iPadOS, use Safari. On Android/Chromebooks, use Chrome. Web Bluetooth requires HTTPS (GitHub Pages works) and a user gesture to connect.</p>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px">
+            <button class="btn ghost small" id="btnClear">Clear log</button>
+            <button class="btn ghost small" id="btnExport">Export CSV</button>
+            <button class="btn ghost small" id="btnSimulate">Simulate press</button>
+          </div>
+
+          <div class="card" style="background:#0f1520;border-color:#1b2433">
+            <div class="hdr"><strong>Live Log</strong><span class="muted" id="countLabel">0 events</span></div>
+            <div class="body" style="padding:0">
+              <table id="logTable" aria-label="Button press log">
+                <thead>
+                  <tr><th>#</th><th>Timestamp (local)</th><th>Source</th><th>Payload</th></tr>
+                </thead>
+                <tbody id="logBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Setup instructions -->
+      <aside class="card">
+        <div class="hdr"><strong>ESP32-C3 Setup (expected)</strong></div>
+        <div class="body">
+          <p>Flash your ESP32-C3 with firmware that exposes a custom BLE service and sends a notification when the on-board button is pressed.</p>
+          <ol>
+            <li>Use any BLE stack (Arduino-ESP32, ESP-IDF, or NimBLE). Advertise a service with UUID <code id="svcUUIDText">12345678-1234-5678-1234-56789abcdef0</code> and a notify characteristic <code id="chrUUIDText">12345678-1234-5678-1234-56789abcdef1</code>.</li>
+            <li>On button press, notify a small payload (e.g., a single byte <code>0x01</code> or a counter).</li>
+            <li>Make sure notifications are enabled and the device name is recognizable (e.g., <code>ESP32C3-Button</code>).</li>
+          </ol>
+          <details>
+            <summary>Minimal Arduino snippet (NimBLE)</summary>
+            <pre style="white-space:pre-wrap"><code>// Library: https://github.com/h2zero/NimBLE-Arduino
+#include &lt;NimBLEDevice.h&gt;
+
+// XIAO ESP32C3 BOOT button is typically GPIO9; adjust if needed
+constexpr int BTN = 9;
+static const char* DEVICE_NAME = "ESP32C3-Button";
+static NimBLECharacteristic* chr;
+
+void setup(){
+  pinMode(BTN, INPUT_PULLUP);
+  NimBLEDevice::init(DEVICE_NAME);
+  NimBLEServer* srv = NimBLEDevice::createServer();
+  auto svc = srv->createService("12345678-1234-5678-1234-56789abcdef0");
+  chr = svc->createCharacteristic(
+    "12345678-1234-5678-1234-56789abcdef1",
+    NIMBLE_PROPERTY::NOTIFY
+  );
+  svc->start();
+  NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+  adv->addServiceUUID(svc->getUUID());
+  adv->setScanResponse(true);
+  NimBLEDevice::startAdvertising();
+}
+
+void loop(){
+  static int last=HIGH; int s=digitalRead(BTN);
+  if(last==HIGH && s==LOW){ // falling edge
+    uint8_t one=1; chr->setValue(&one,1); chr->notify();
+  }
+  last=s; delay(5);
+}
+</code></pre>
+          </details>
+          <p class="muted">This website is static and works on GitHub Pages—no backend needed. Data persists locally in your browser.</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer>
+    Built for the ESP32-C3 Web Bluetooth demo • <span class="muted">Works on Chrome, Edge, Safari (iOS 15+)</span>
+  </footer>
+
+  <script>
+  // ======== Configuration (match these with your ESP firmware) ========
+  const SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
+  const CHAR_UUID    = '12345678-1234-5678-1234-56789abcdef1';
+  // ================================================================
+
+  const $ = (sel)=>document.querySelector(sel);
+  const connDot = $('#connDot');
+  const connText = $('#connText');
+  const devicePill = $('#devicePill');
+  const servicePill = $('#servicePill');
+  const charPill = $('#charPill');
+  const logBody = $('#logBody');
+  const countLabel = $('#countLabel');
+
+  let device = null, server = null, charNotify = null; let eventCount = 0; let log = [];
+
+  function setConn(state, name){
+    if(state==='ok'){ connDot.className='dot ok'; connText.textContent='Connected'; devicePill.textContent = 'Device: ' + (name||'—'); }
+    else if(state==='bad'){ connDot.className='dot bad'; connText.textContent='Disconnected'; devicePill.textContent = 'Device: —';}
+    else { connDot.className='dot'; connText.textContent='Not connected'; devicePill.textContent = 'Device: —'; }
+  }
+
+  function appendRow(source, payload){
+    eventCount++; const ts = new Date().toLocaleString();
+    const tr = document.createElement('tr');
+    const idx = document.createElement('td'); idx.textContent = eventCount;
+    const t  = document.createElement('td'); t.textContent = ts;
+    const s  = document.createElement('td'); s.textContent = source;
+    const p  = document.createElement('td'); p.textContent = payload;
+    tr.append(idx,t,s,p); logBody.prepend(tr);
+    countLabel.textContent = `${eventCount} ${eventCount===1?'event':'events'}`;
+    log.push({i:eventCount, ts: new Date().toISOString(), source, payload});
+    try{localStorage.setItem('ble-btn-log', JSON.stringify(log));}catch(e){}
+  }
+
+  function restore(){
+    try{ const raw=localStorage.getItem('ble-btn-log'); if(raw){ log=JSON.parse(raw); eventCount=log.length; countLabel.textContent = `${eventCount} ${eventCount===1?'event':'events'}`; log.slice().reverse().forEach(r=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.i}</td><td>${new Date(r.ts).toLocaleString()}</td><td>${r.source}</td><td>${r.payload}</td>`; logBody.append(tr); }); }}catch(e){}
+  }
+
+  async function connect(){
+    if(!('bluetooth' in navigator)){
+      alert('Web Bluetooth not supported in this browser. Try Chrome, Edge, or Safari (iOS 15+).'); return;
+    }
+    try{
+      const dev = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }],
+        optionalServices: [SERVICE_UUID]
+      });
+      device = dev; device.addEventListener('gattserverdisconnected', onDisconnect);
+      setConn('bad'); connText.textContent='Connecting…';
+
+      server = await device.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      const chr = await service.getCharacteristic(CHAR_UUID);
+      await chr.startNotifications();
+      chr.addEventListener('characteristicvaluechanged', evt => {
+        const dv = evt.target.value; // DataView
+        // Interpret as first byte or UTF-8 fallback
+        let payload;
+        if(dv.byteLength>0){ payload = '0x' + dv.getUint8(0).toString(16).padStart(2,'0'); }
+        else { payload = '(empty)'; }
+        appendRow('ESP32', payload);
+      });
+      charNotify = chr;
+      setConn('ok', device.name || '(unnamed)');
+      servicePill.textContent = 'Service: ' + SERVICE_UUID.slice(0,8) + '…';
+      charPill.textContent = 'Characteristic: ' + CHAR_UUID.slice(0,8) + '…';
+      $('#btnDisconnect').disabled = false;
+    } catch(err){
+      console.error(err); alert('Connection failed: ' + err.message);
+      setConn();
+    }
+  }
+
+  function onDisconnect(){ setConn('bad'); $('#btnDisconnect').disabled = true; }
+
+  async function disconnect(){ try{ if(device && device.gatt.connected){ await device.gatt.disconnect(); } } finally { onDisconnect(); } }
+
+  function clearLog(){ log=[]; eventCount=0; logBody.innerHTML=''; countLabel.textContent='0 events'; localStorage.removeItem('ble-btn-log'); }
+
+  function exportCSV(){
+    const rows = [['#','timestamp_iso','source','payload'], ...log.map(r=>[r.i,r.ts,r.source,r.payload])];
+    const csv = rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='esp32-button-log.csv'; a.click(); URL.revokeObjectURL(url);
+  }
+
+  function simulate(){ appendRow('Simulated', '0x01'); }
+
+  // Wire up UI
+  $('#btnConnect').addEventListener('click', connect);
+  $('#btnDisconnect').addEventListener('click', disconnect);
+  $('#btnClear').addEventListener('click', clearLog);
+  $('#btnExport').addEventListener('click', exportCSV);
+  $('#btnSimulate').addEventListener('click', simulate);
+  restore();
+  </script>
+</body>
+</html>
