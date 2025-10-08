@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'/>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'/>
+<title>chick-fil-a Router Admin</title>
+<style>
+body{font-family:Arial;background:#0c0f14;color:#fff;padding:20px;}
+button{padding:8px 14px;margin:4px;background:#0b5cab;color:#fff;border:0;border-radius:6px;cursor:pointer;}
+textarea{width:100%;height:200px;background:#111;color:#fff;border-radius:8px;border:1px solid #333;padding:10px;}
+</style>
+</head>
+<body>
+<h1>chick-fil-a Router Admin</h1>
+<p>Connect via Web Bluetooth to configure your ESP32-C3 router.</p>
+<button id='connectBtn'>Connect BLE</button>
+<h3>Captive Portal HTML</h3>
+<textarea id='htmlBox'></textarea><br/>
+<button id='loadBtn'>Load from ESP</button>
+<button id='saveBtn'>Save to ESP</button>
+
+<script>
+const SERVICE='12345678-1234-5678-1234-56789abcdef0';
+const CMD='12345678-1234-5678-1234-56789abcdef1';
+const STAT='12345678-1234-5678-1234-56789abcdef2';
+let dev,server,svc,chrCmd,chrStat;
+
+async function connect(){
+  dev=await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE]}]});
+  server=await dev.gatt.connect();
+  svc=await server.getPrimaryService(SERVICE);
+  chrCmd=await svc.getCharacteristic(CMD);
+  chrStat=await svc.getCharacteristic(STAT);
+  await chrStat.startNotifications();
+  chrStat.addEventListener('characteristicvaluechanged',e=>{
+    const val=new TextDecoder().decode(e.target.value);
+    document.getElementById('htmlBox').value=val;
+  });
+  alert('Connected to '+dev.name);
+}
+
+async function loadHTML(){
+  const data=new TextEncoder().encode('GET_HTML');
+  await chrCmd.writeValue(data);
+}
+async function saveHTML(){
+  const html=document.getElementById('htmlBox').value;
+  const data=new TextEncoder().encode('SET_HTML:'+html);
+  await chrCmd.writeValue(data);
+  alert('HTML sent to ESP');
+}
+document.getElementById('connectBtn').onclick=connect;
+document.getElementById('loadBtn').onclick=loadHTML;
+document.getElementById('saveBtn').onclick=saveHTML;
+</script>
+</body></html>
